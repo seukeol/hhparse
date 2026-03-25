@@ -1,5 +1,7 @@
 from config import openai_api_key
 from openai import OpenAI
+from playwright.async_api import async_playwright, Playwright
+
 
 async def get_letter(text, skills):
     client = OpenAI(
@@ -126,8 +128,9 @@ PyTest (API-тестирование), Playwright / Selenium (парсинг и 
 tg @seukeolcode
 email seukeolttyl@gmail.com
 =============================================================================
-Вот текст вакансии: {description}
-Вот отдельно указанные теги вакансии: {}
+Вот текст вакансии: {text}
+============================================================================
+Вот отдельно указанные теги вакансии: {skills}
     """
 
     response = client.responses.create(
@@ -139,3 +142,38 @@ email seukeolttyl@gmail.com
     )
 
     return response.output[0].content[0].text
+
+
+async def check_login(page):
+    await page.wait_for_load_state("domcontentloaded")
+    count = await page.locator('a.supernova-button[data-qa="login"]').count()
+    is_present = count > 0
+    return not is_present
+
+
+async def login(page):
+    await page.locator('a.supernova-button[data-qa="login"]').click()
+    phone_number = input('Введите номер телефона (без +7): ')
+    await page.wait_for_selector('input[data-qa="magritte-phone-input-national-number-input"]')
+    await page.locator('input[data-qa="magritte-phone-input-national-number-input"]').fill(phone_number)
+    await page.locator('button[data-qa="submit-button"]').click()
+
+    await page.wait_for_selector('[data-qa="magritte-pincode-input-digit-0"]')
+    sms_code = input('Введите код из смс: ')
+    await page.locator('[data-qa="magritte-pincode-input-digit-0"]').click()
+    await page.keyboard.type(sms_code)
+    return True
+
+async def responder():
+    async with async_playwright() as playwright:
+        chromium = playwright.chromium
+        browser = await chromium.launch()
+        page = await browser.new_page()
+        await page.goto("https://hh.ru")
+        is_logged_in = await check_login(page)
+        if not is_logged_in:
+            await login(page)
+
+
+    await page.goto("http://example.com")
+    await browser.close()
