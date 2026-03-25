@@ -1,5 +1,7 @@
 from config import search, employment_forms, work_formats, items_on_page
 import pandas as pd
+import os
+
 
 async def get_link():
     employment_part = ''.join(f'&employment_form={i}' for i in employment_forms)
@@ -9,5 +11,13 @@ async def get_link():
 
 
 async def result_to_excel(data):
-    df = pd.DataFrame(data)
-    df.to_excel('vacancies.xlsx', index=False)
+    new_df = pd.DataFrame(data)
+    file_path = 'vacancies.xlsx'
+    if os.path.exists(file_path):
+        existing_df = pd.read_excel(file_path, engine="openpyxl")
+        combined_df = pd.concat([existing_df, new_df], ignore_index=True)
+        first_col = combined_df.columns[0]
+        combined_df = combined_df.drop_duplicates(subset=first_col, keep='first')
+    else:
+        combined_df = new_df
+    combined_df.to_excel(file_path, index=False)

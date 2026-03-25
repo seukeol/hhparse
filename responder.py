@@ -1,7 +1,8 @@
 from config import openai_api_key
 from openai import OpenAI
 from playwright.async_api import async_playwright, Playwright
-
+import pandas as pd
+import asyncio
 
 async def get_letter(text, skills):
     client = OpenAI(
@@ -9,7 +10,7 @@ async def get_letter(text, skills):
         base_url="https://api.proxyapi.ru/openai/v1",
     )
     prompt = f"""
-    Привет. Ты - профессиональный помощник сейчас я пришлю тебе текст вакансии, а ты будешь писать сопроводительное. Пиши кратко, по человечески, не очень официально (привет, вместо здравствуйте итп). Начинай строго с "Привет!", заканчивай строго "Буду рад пообщаться :)" Я джун, это важно понимать, НО НЕ ПИСАТЬ ОБ ЭТОМ. любой навык, который есть и в вакансии, и в моем резюме - надо упомянуть. Не обязательно говорить что именно я делал, но и не запрещено. смотри по ситуации, но обязательно хотя бы просто упомяни"
+    Привет. Ты - профессиональный помощник сейчас я пришлю тебе текст вакансии, а ты будешь писать сопроводительное. Пиши кратко, по человечески, не очень официально (привет, вместо здравствуйте итп). Старайся избегать списков, банальных для нейронок конструкций, чтобы не было понятно, что это нейросеть. Так же не используй длинное тире, вместо него ставь дефиз. Не злоупотребляй скобками (были ответы, где нейросеть писала задачу и в скобках библиотеку, это можно, но если так все письмо - это выглядит странно). Иногда можешь игнорировать знаки препинания, вроде кавычек (пример: "под ключ" в контексте проекта можно писать без них, т.к. это уже достаточно устоявшееся выражение). Начинай строго с "Привет!", заканчивай строго "Буду рад пообщаться :)" Я джун, это важно понимать, НО НЕ ПИСАТЬ ОБ ЭТОМ. любой навык, который есть и в вакансии, и в моем резюме - надо упомянуть. Не обязательно говорить что именно я делал, но и не запрещено. смотри по ситуации, но обязательно хотя бы просто упомяни"
 ===========================================================================
 Вот мой опыт работы:
 
@@ -136,7 +137,7 @@ email seukeolttyl@gmail.com
     response = client.responses.create(
         model="gpt-4o",
         input=[
-            {"role": "system", "content": '''Ты помощник команды Band4Power'''},
+            {"role": "system", "content": '''Ты - эксперт по трудоустройству в IT сфере.'''},
             {"role": "user", "content": prompt}
         ]
     )
@@ -153,27 +154,52 @@ async def check_login(page):
 
 async def login(page):
     await page.locator('a.supernova-button[data-qa="login"]').click()
+    await page.locator('[data-qa="submit-button"]').click()
     phone_number = input('Введите номер телефона (без +7): ')
     await page.wait_for_selector('input[data-qa="magritte-phone-input-national-number-input"]')
     await page.locator('input[data-qa="magritte-phone-input-national-number-input"]').fill(phone_number)
     await page.locator('button[data-qa="submit-button"]').click()
 
     await page.wait_for_selector('[data-qa="magritte-pincode-input-digit-0"]')
-    sms_code = input('Введите код из смс: ')
-    await page.locator('[data-qa="magritte-pincode-input-digit-0"]').click()
-    await page.keyboard.type(sms_code)
+    await asyncio.sleep(15)
     return True
+
+
+async def respond(page, url, message):
+    await page.goto(url)
+    await page.wait_for_selector('[data-qa="vacancy-response-link-top"]')
+    await page.locator('[data-qa="vacancy-response-link-top"]').first.click()
+    await page.wait_for_selector('[data-qa="add-cover-letter"]')
+    await page.locator('[data-qa="add-cover-letter"]').click()
+
+    textarea = page.locator('[data-qa="vacancy-response-popup-form-letter-input"]')
+    await textarea.wait_for()
+    await textarea.click()
+    await textarea.fill(message)
+    await page.locator('[data-qa="vacancy-response-submit-popup"]').click()
+
 
 async def responder():
     async with async_playwright() as playwright:
         chromium = playwright.chromium
-        browser = await chromium.launch()
+        browser = await chromium.launch(headless=False, )
         page = await browser.new_page()
+        await page.set_extra_http_headers({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/114.0.0.0 Safari/537.36",
+            "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Referer": "https://hh.ru/"
+        })
         await page.goto("https://hh.ru")
         is_logged_in = await check_login(page)
         if not is_logged_in:
             await login(page)
-
-
-    await page.goto("http://example.com")
-    await browser.close()
+        df = pd.read_excel('vacancies.xlsx')
+        for i, row in df.iterrows():
+            if row['responded'] == 0 and row['letter']:
+                await respond(page, row['link'], row['letter'])
+                df.loc[i, 'responded'] = 1
+        df.to_excel('vacancies.xlsx', index=False)
+        await browser.close()
