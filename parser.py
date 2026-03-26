@@ -95,7 +95,7 @@ async def process_page(client, url, page_number):
 
 async def parser():
     url = await get_link()
-    async with AsyncClient(headers=HEADERS, follow_redirects=True) as client:
+    async with AsyncClient(headers=HEADERS, follow_redirects=True, timeout=60.0) as client:
         await client.get('https://hh.ru/')
         await asyncio.sleep(random.randint(2, 4))
         tasks = [asyncio.create_task(process_page(client, url, page)) for page in range(pages_to_parse)]

@@ -10,7 +10,7 @@ async def get_letter(text, skills):
         base_url="https://api.proxyapi.ru/openai/v1",
     )
     prompt = f"""
-    Привет. Ты - профессиональный помощник сейчас я пришлю тебе текст вакансии, а ты будешь писать сопроводительное. Пиши кратко, по человечески, не очень официально (привет, вместо здравствуйте итп). Старайся избегать списков, банальных для нейронок конструкций, чтобы не было понятно, что это нейросеть. Так же не используй длинное тире, вместо него ставь дефиз. Не злоупотребляй скобками (были ответы, где нейросеть писала задачу и в скобках библиотеку, это можно, но если так все письмо - это выглядит странно). Иногда можешь игнорировать знаки препинания, вроде кавычек (пример: "под ключ" в контексте проекта можно писать без них, т.к. это уже достаточно устоявшееся выражение). Начинай строго с "Привет!", заканчивай строго "Буду рад пообщаться :)" Я джун, это важно понимать, НО НЕ ПИСАТЬ ОБ ЭТОМ. любой навык, который есть и в вакансии, и в моем резюме - надо упомянуть. Не обязательно говорить что именно я делал, но и не запрещено. смотри по ситуации, но обязательно хотя бы просто упомяни"
+    Привет. Ты - профессиональный помощник сейчас я пришлю тебе текст вакансии, а ты будешь писать сопроводительное. Пиши очень коротко, по человечески, не очень официально (привет, вместо здравствуйте итп). Старайся избегать списков, банальных для нейронок конструкций, чтобы не было понятно, что это нейросеть. Старайся избегать сложных метафор и речевых оборотов. Так же не используй длинное тире, вместо него ставь дефиз. Не злоупотребляй скобками (были ответы, где нейросеть писала задачу и в скобках библиотеку, это можно, но если так все письмо - это выглядит странно). Иногда можешь игнорировать знаки препинания, вроде кавычек (пример: "под ключ" в контексте проекта можно писать без них, т.к. это уже достаточно устоявшееся выражение). Начинай строго с "Привет!", заканчивай строго "Буду рад пообщаться :)" Я джун, это важно понимать, НО НЕ ПИСАТЬ ОБ ЭТОМ. любой навык, который есть и в вакансии, и в моем резюме - надо упомянуть. Не обязательно говорить что именно я делал, но и не запрещено. смотри по ситуации, но обязательно хотя бы просто упомяни"
 ===========================================================================
 Вот мой опыт работы:
 
@@ -146,7 +146,7 @@ email seukeolttyl@gmail.com
 
 
 async def check_login(page):
-    await page.wait_for_load_state("domcontentloaded")
+    await page.wait_for_load_state("domcontentloaded", timeout=60000)
     count = await page.locator('a.supernova-button[data-qa="login"]').count()
     is_present = count > 0
     return not is_present
@@ -161,28 +161,52 @@ async def login(page):
     await page.locator('button[data-qa="submit-button"]').click()
 
     await page.wait_for_selector('[data-qa="magritte-pincode-input-digit-0"]')
-    await asyncio.sleep(15)
+    await asyncio.sleep(30)
     return True
 
 
 async def respond(page, url, message):
-    await page.goto(url)
-    await page.wait_for_selector('[data-qa="vacancy-response-link-top"]')
-    await page.locator('[data-qa="vacancy-response-link-top"]').first.click()
-    await page.wait_for_selector('[data-qa="add-cover-letter"]')
-    await page.locator('[data-qa="add-cover-letter"]').click()
+    try:
+        await page.goto(url)
+        await page.wait_for_selector('[data-qa="vacancy-response-link-top"]')
+        await page.locator('[data-qa="vacancy-response-link-top"]').first.click()
+    except Exception as e:
+        print('respond_error', e)
+        await asyncio.sleep(15)
+        return False
+    try:
+        relocation = page.locator('[data-qa="relocation-warning-confirm"]')
+        await relocation.wait_for(state="visible", timeout=3000)
+        await relocation.click()
+    except Exception:
+        pass
+    try:
+        await page.wait_for_selector('[data-qa="add-cover-letter"]')
+        await page.locator('[data-qa="add-cover-letter"]').click()
+    except Exception as e:
+        print('add_cover_letter_error', e)
 
-    textarea = page.locator('[data-qa="vacancy-response-popup-form-letter-input"]')
-    await textarea.wait_for(state="visible")
-    await textarea.click()
-    await textarea.fill(message)
-    await page.locator('[data-qa="vacancy-response-submit-popup"]').click()
+    try:
+        textarea = page.locator('[data-qa="vacancy-response-popup-form-letter-input"]')
+        await textarea.wait_for(state="visible")
+        await textarea.click()
+        await textarea.fill(message)
+    except Exception as e:
+        print('type_letter_error', e)
+        return False
+    try:
+        await page.locator('[data-qa="vacancy-response-submit-popup"]').click()
+    except Exception as e:
+        print('click_respond_error', e)
+        return False
+
+    return True
 
 
 async def responder():
     async with async_playwright() as playwright:
         chromium = playwright.chromium
-        browser = await chromium.launch(headless=False, )
+        browser = await chromium.launch(headless=False)
         page = await browser.new_page()
         await page.set_extra_http_headers({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -192,14 +216,16 @@ async def responder():
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
             "Referer": "https://hh.ru/"
         })
-        await page.goto("https://hh.ru")
+        await page.goto("https://hh.ru", timeout=60000)
         is_logged_in = await check_login(page)
         if not is_logged_in:
             await login(page)
         df = pd.read_excel('vacancies.xlsx')
         for i, row in df.iterrows():
             if row['responded'] == 0 and row['letter']:
-                await respond(page, row['link'], row['letter'])
-                df.loc[i, 'responded'] = 1
+                is_responded = await respond(page, row['link'], row['letter'])
+                if is_responded:
+                    df.loc[i, 'responded'] = 1
+
         df.to_excel('vacancies.xlsx', index=False)
         await browser.close()
