@@ -173,7 +173,7 @@ async def respond(page, url, message):
     await page.locator('[data-qa="add-cover-letter"]').click()
 
     textarea = page.locator('[data-qa="vacancy-response-popup-form-letter-input"]')
-    await textarea.wait_for()
+    await textarea.wait_for(state="visible")
     await textarea.click()
     await textarea.fill(message)
     await page.locator('[data-qa="vacancy-response-submit-popup"]').click()
