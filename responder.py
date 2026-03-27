@@ -159,43 +159,71 @@ async def login(page):
     await page.wait_for_selector('input[data-qa="magritte-phone-input-national-number-input"]')
     await page.locator('input[data-qa="magritte-phone-input-national-number-input"]').fill(phone_number)
     await page.locator('button[data-qa="submit-button"]').click()
-
     await page.wait_for_selector('[data-qa="magritte-pincode-input-digit-0"]')
     await asyncio.sleep(30)
     return True
 
 
 async def respond(page, url, message):
-    try:
-        await page.goto(url)
-        await page.wait_for_selector('[data-qa="vacancy-response-link-top"]')
-        await page.locator('[data-qa="vacancy-response-link-top"]').first.click()
-    except Exception as e:
-        print('respond_error', e)
-        await asyncio.sleep(15)
-        return False
-    try:
-        relocation = page.locator('[data-qa="relocation-warning-confirm"]')
-        await relocation.wait_for(state="visible", timeout=3000)
-        await relocation.click()
-    except Exception:
-        pass
-    try:
-        await page.wait_for_selector('[data-qa="add-cover-letter"]')
-        await page.locator('[data-qa="add-cover-letter"]').click()
-    except Exception as e:
-        print('add_cover_letter_error', e)
+    async def find(selector, timeout=3000):
+        try:
+            await page.wait_for_selector(selector, timeout=timeout)
+            return page.locator(selector)
+        except Exception:
+            return None
 
     try:
-        textarea = page.locator('[data-qa="vacancy-response-popup-form-letter-input"]')
-        await textarea.wait_for(state="visible")
+        await page.goto(url, wait_until="domcontentloaded")
+    except Exception as e:
+        print('navigate_error', e)
+        await asyncio.sleep(15)
+        return False
+
+    # Кнопка "Откликнуться"
+    btn = await find('[data-qa="vacancy-response-link-top"]')
+    if btn is None:
+        return False
+    try:
+        await btn.first.click()
+    except Exception as e:
+        print('respond_error', e)
+        return False
+
+    # Предупреждение о релокации
+    relocation = await find('[data-qa="relocation-warning-confirm"]')
+    if relocation:
+        try:
+            await relocation.click()
+        except Exception:
+            pass
+
+    # Кнопка "Добавить сопроводительное письмо"
+    cover_btn = await find('[data-qa="add-cover-letter"]')
+    if cover_btn:
+        try:
+            await cover_btn.click()
+        except Exception as e:
+            print('add_cover_letter_error', e)
+
+    # Ввод текста письма
+    textarea = await find('[data-qa="vacancy-response-popup-form-letter-input"]')
+    if textarea is None:
+        print('type_letter_error: textarea not found')
+        return False
+    try:
         await textarea.click()
         await textarea.fill(message)
     except Exception as e:
         print('type_letter_error', e)
         return False
+
+    # Кнопка отправки
+    submit = await find('[data-qa="vacancy-response-submit-popup"]')
+    if submit is None:
+        print('click_respond_error: submit button not found')
+        return False
     try:
-        await page.locator('[data-qa="vacancy-response-submit-popup"]').click()
+        await submit.click()
     except Exception as e:
         print('click_respond_error', e)
         return False
