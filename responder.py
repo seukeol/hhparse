@@ -168,34 +168,53 @@ async def login(page):
 async def respond(page, url, message):
     try:
         await page.goto(url)
-        await page.wait_for_selector('[data-qa="vacancy-response-link-top"]')
-        await page.locator('[data-qa="vacancy-response-link-top"]').first.click()
+        await page.wait_for_load_state(
+            'domcontentloaded',
+            timeout=30000
+        )
     except Exception as e:
-        print('respond_error', e)
-        await asyncio.sleep(15)
+        print('load_error', e)
+        await asyncio.sleep(5)
         return False
+
+    try:
+        already_responded = page.locator('[data-qa="vacancy-response-link-top-again"]')
+        await already_responded.wait_for(state="visible", timeout=3000)
+        print('already_responded')
+        return True
+    except Exception:
+        pass
+
+    try:
+        await page.locator('[data-qa="vacancy-response-link-top"]').first.click(timeout=3000)
+    except Exception as e:
+        print('response_error', e)
+        return False
+
     try:
         relocation = page.locator('[data-qa="relocation-warning-confirm"]')
         await relocation.wait_for(state="visible", timeout=3000)
-        await relocation.click()
+        await relocation.click(timeout=3000)
     except Exception:
         pass
+
     try:
-        await page.wait_for_selector('[data-qa="add-cover-letter"]')
-        await page.locator('[data-qa="add-cover-letter"]').click()
+        await page.wait_for_selector('[data-qa="add-cover-letter"]', timeout=3000)
+        await page.locator('[data-qa="add-cover-letter"]').click(timeout=3000)
     except Exception as e:
         print('add_cover_letter_error', e)
 
     try:
         textarea = page.locator('[data-qa="vacancy-response-popup-form-letter-input"]')
-        await textarea.wait_for(state="visible")
-        await textarea.click()
+        await textarea.wait_for(state="visible", timeout=3000)
+        await textarea.click(timeout=3000)
         await textarea.fill(message)
     except Exception as e:
         print('type_letter_error', e)
         return False
+
     try:
-        await page.locator('[data-qa="vacancy-response-submit-popup"]').click()
+        await page.locator('[data-qa="vacancy-response-submit-popup"]').click(timeout=3000)
     except Exception as e:
         print('click_respond_error', e)
         return False
