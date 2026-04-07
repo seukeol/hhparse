@@ -5,7 +5,7 @@ import asyncio
 import pandas as pd
 
 async def main():
-    await parser()
+    #await parser()
 
     if is_letter:
         df = pd.read_excel('vacancies.xlsx', engine="openpyxl")

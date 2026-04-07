@@ -85,7 +85,6 @@ SQLite
 SQLAlchemy
 Docker
 HTTPX
-Python 3
 API
 gRPC
 MySQL
