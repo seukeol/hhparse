@@ -1,9 +1,8 @@
 import asyncio
 from httpx import AsyncClient
-from config import pages_to_parse, is_letter
+from config import pages_to_parse
 from utils import get_link, result_to_excel
 from lxml import html
-from responder import get_letter
 import random
 
 
